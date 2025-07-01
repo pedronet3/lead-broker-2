@@ -36,7 +36,7 @@ export type Database = {
             foreignKeyName: "bids_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
-            referencedRelation: "Leads"
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {
@@ -48,12 +48,13 @@ export type Database = {
           },
         ]
       }
-      Leads: {
+      leads: {
         Row: {
           assigned_to_partner_id: string | null
-          buy_now_price: number | null
           created_at: string
+          description: string | null
           email: string | null
+          ends_at: string | null
           First_Name: string | null
           id: string
           interest_type: string | null
@@ -66,9 +67,10 @@ export type Database = {
         }
         Insert: {
           assigned_to_partner_id?: string | null
-          buy_now_price?: number | null
           created_at?: string
+          description?: string | null
           email?: string | null
+          ends_at?: string | null
           First_Name?: string | null
           id?: string
           interest_type?: string | null
@@ -81,9 +83,10 @@ export type Database = {
         }
         Update: {
           assigned_to_partner_id?: string | null
-          buy_now_price?: number | null
           created_at?: string
+          description?: string | null
           email?: string | null
+          ends_at?: string | null
           First_Name?: string | null
           id?: string
           interest_type?: string | null
@@ -167,7 +170,7 @@ export type Database = {
             foreignKeyName: "transactions_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
-            referencedRelation: "Leads"
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {

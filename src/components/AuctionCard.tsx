@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { toast } from '@/hooks/use-toast'; // Importando o toast para feedback
 
 interface Lead {
   id: string;
@@ -21,11 +22,21 @@ interface AuctionCardProps {
 export const AuctionCard = ({ auction }: AuctionCardProps) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [currentBid, setCurrentBid] = useState<number | null>(null);
-  const [selectedBidAmount, setSelectedBidAmount] = useState<number | null>(null); // Estado para o lance selecionado
-  const [isModalOpen, setIsModalOpen] = useState(false); // Estado para controlar o modal
+  const [selectedBidAmount, setSelectedBidAmount] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Estado para o loading do botão
 
-  // ... (useEffect para o cronômetro e para buscar o lance mais alto continuam os mesmos)
+  const fetchHighestBid = async () => {
+    const { data } = await supabase.from('bids').select('amount').eq('lead_id', auction.id).order('amount', { ascending: false }).limit(1).single();
+    if (data) {
+      setCurrentBid(data.amount);
+    } else {
+      setCurrentBid(null); // Garante que se não houver lances, o estado é nulo
+    }
+  };
+
   useEffect(() => {
+    // ... (useEffect do cronômetro - sem alterações)
     const calculateTimeLeft = () => {
       const endTime = new Date(auction.ends_at).getTime();
       const now = new Date().getTime();
@@ -34,11 +45,8 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
         const days = Math.floor(difference / (1000 * 60 * 60 * 24));
         const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        if (days > 0) setTimeLeft(`${days}d ${hours}h ${minutes}m`);
-        else setTimeLeft(`${hours}h ${minutes}m`);
-      } else {
-        setTimeLeft('Auction Ended');
-      }
+        if (days > 0) setTimeLeft(`${days}d ${hours}h ${minutes}m`); else setTimeLeft(`${hours}h ${minutes}m`);
+      } else { setTimeLeft('Auction Ended'); }
     };
     calculateTimeLeft();
     const timer = setInterval(calculateTimeLeft, 1000);
@@ -46,39 +54,61 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
   }, [auction.ends_at]);
 
   useEffect(() => {
-    const fetchHighestBid = async () => {
-      const { data } = await supabase.from('bids').select('amount').eq('lead_id', auction.id).order('amount', { ascending: false }).limit(1).single();
-      if (data) setCurrentBid(data.amount);
+    // useEffect para buscar lances, agora também re-escuta mudanças na tabela de lances
+    fetchHighestBid(); 
+
+    const channel = supabase.channel(`bids-for-lead-${auction.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids', filter: `lead_id=eq.${auction.id}` },
+        (payload) => {
+          console.log('New bid received!', payload);
+          fetchHighestBid(); // Re-busca o lance mais alto quando um novo lance é inserido
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-    fetchHighestBid();
   }, [auction.id]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0 }).format(amount);
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 85) return 'bg-green-500';
-    if (score >= 70) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
+  const formatCurrency = (amount: number) => new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0 }).format(amount);
+  const getScoreColor = (score: number) => { if (score >= 85) return 'bg-green-500'; if (score >= 70) return 'bg-yellow-500'; return 'bg-red-500'; };
   
   const baseBid = currentBid || auction.price_minimum;
   const bidOptions = [
-    { percentage: '10%', value: Math.ceil(baseBid * 1.1) }, // Math.ceil para arredondar para cima
-    { percentage: '20%', value: Math.ceil(baseBid * 1.2) },
-    { percentage: '30%', value: Math.ceil(baseBid * 1.3) },
+    { percentage: '10%', value: Math.ceil(baseBid * 1.1), color: 'bg-red-100 hover:bg-red-200' },
+    { percentage: '20%', value: Math.ceil(baseBid * 1.2), color: 'bg-orange-100 hover:bg-orange-200' },
+    { percentage: '30%', value: Math.ceil(baseBid * 1.3), color: 'bg-green-100 hover:bg-green-200' },
   ];
 
-  // Placeholder para a lógica de submeter o lance
-  const handleSubmitBid = () => {
-    if (!selectedBidAmount) {
-      alert("Please select a bid amount.");
+  const handleSubmitBid = async () => {
+    if (!selectedBidAmount) return;
+
+    setIsSubmitting(true);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      toast({ title: "Authentication Error", description: "You must be logged in to place a bid.", variant: "destructive" });
+      setIsSubmitting(false);
       return;
     }
-    console.log(`Submitting bid of: ${formatCurrency(selectedBidAmount)} for lead ${auction.id}`);
-    // Futuramente, aqui entrará a lógica de inserir no Supabase
-    setIsModalOpen(false); // Fecha o modal após submeter
+
+    const { error } = await supabase.from('bids').insert({
+      lead_id: auction.id,
+      partner_id: user.id,
+      amount: selectedBidAmount,
+    });
+
+    if (error) {
+      toast({ title: "Bid Failed", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Bid Placed!", description: `Your bid of ${formatCurrency(selectedBidAmount)} was successful.` });
+      // A atualização em tempo real já vai cuidar de atualizar o 'currentBid', não precisamos chamar fetchHighestBid() aqui.
+    }
+    
+    setIsSubmitting(false);
+    setIsModalOpen(false);
+    setSelectedBidAmount(null);
   };
 
   const handleBuyNow = () => console.log(`Buy now for lead ${auction.id}`);
@@ -95,11 +125,8 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
         <div className="mb-6 p-3 bg-blue-50 rounded-lg text-center"><p className="text-xs text-gray-600 mb-1">Time Remaining</p><p className="text-lg font-bold text-blue-600">{timeLeft}</p></div>
         
         <div className="grid grid-cols-2 gap-3 mt-auto">
-          {/* --- BOTÃO "PLACE BID" AGORA ABRE O MODAL --- */}
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full">Place Bid</Button>
-            </DialogTrigger>
+            <DialogTrigger asChild><Button variant="outline" className="w-full">Place Bid</Button></DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader><DialogTitle>Place Your Bid</DialogTitle></DialogHeader>
               <div className="py-4 space-y-4">
@@ -108,8 +135,8 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
                   {bidOptions.map((option, index) => (
                     <Button 
                       key={option.percentage} 
-                      variant={selectedBidAmount === option.value ? "default" : (index === 2 ? "secondary" : "ghost")}
-                      className={`w-full justify-between h-12 text-md ${selectedBidAmount === option.value ? 'ring-2 ring-blue-500' : ''}`}
+                      variant="ghost"
+                      className={`w-full justify-between h-12 text-md ${option.color} ${selectedBidAmount === option.value ? 'ring-2 ring-blue-500' : ''}`}
                       onClick={() => setSelectedBidAmount(option.value)}
                     >
                       <span>Increase by {option.percentage}</span>
@@ -120,7 +147,9 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
               </div>
               <DialogFooter>
                 <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                <Button onClick={handleSubmitBid} disabled={!selectedBidAmount}>Place Bid</Button>
+                <Button onClick={handleSubmitBid} disabled={!selectedBidAmount || isSubmitting}>
+                  {isSubmitting ? 'Placing Bid...' : 'Place Bid'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

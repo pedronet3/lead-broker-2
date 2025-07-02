@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { toast } from '@/hooks/use-toast'; // Importando o toast para feedback
+import { toast } from '@/hooks/use-toast';
 
 interface Lead {
   id: string;
@@ -24,19 +24,18 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
   const [currentBid, setCurrentBid] = useState<number | null>(null);
   const [selectedBidAmount, setSelectedBidAmount] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Estado para o loading do botão
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchHighestBid = async () => {
     const { data } = await supabase.from('bids').select('amount').eq('lead_id', auction.id).order('amount', { ascending: false }).limit(1).single();
     if (data) {
       setCurrentBid(data.amount);
     } else {
-      setCurrentBid(null); // Garante que se não houver lances, o estado é nulo
+      setCurrentBid(null);
     }
   };
 
   useEffect(() => {
-    // ... (useEffect do cronômetro - sem alterações)
     const calculateTimeLeft = () => {
       const endTime = new Date(auction.ends_at).getTime();
       const now = new Date().getTime();
@@ -54,14 +53,12 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
   }, [auction.ends_at]);
 
   useEffect(() => {
-    // useEffect para buscar lances, agora também re-escuta mudanças na tabela de lances
     fetchHighestBid(); 
 
     const channel = supabase.channel(`bids-for-lead-${auction.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids', filter: `lead_id=eq.${auction.id}` },
         (payload) => {
-          console.log('New bid received!', payload);
-          fetchHighestBid(); // Re-busca o lance mais alto quando um novo lance é inserido
+          fetchHighestBid(); 
         }
       )
       .subscribe();
@@ -103,7 +100,6 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
       toast({ title: "Bid Failed", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Bid Placed!", description: `Your bid of ${formatCurrency(selectedBidAmount)} was successful.` });
-      // A atualização em tempo real já vai cuidar de atualizar o 'currentBid', não precisamos chamar fetchHighestBid() aqui.
     }
     
     setIsSubmitting(false);
@@ -116,7 +112,6 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
 
   return (
     <Card className="relative h-full flex flex-col hover:shadow-lg transition-shadow">
-      {/* ... (código do card principal continua o mesmo) ... */}
       <div className="absolute top-4 right-4 z-10"><div className={`w-12 h-12 rounded-full ${getScoreColor(auction.lead_score)} flex items-center justify-center text-white font-bold text-sm`}>{auction.lead_score}</div></div>
       <CardContent className="p-6 flex flex-col h-full">
         <div className="mb-4 pr-16"><h3 className="text-lg font-semibold text-gray-900 mb-2">{auction.interest_type}</h3><p className="text-sm text-gray-600 mb-3">{auction.location}</p></div>
@@ -132,7 +127,7 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
               <div className="py-4 space-y-4">
                 <div className="text-center p-2 rounded-md bg-gray-100"><p className="text-sm text-gray-600">Current Bid: <span className="font-bold">{formatCurrency(baseBid)}</span></p><p className="text-sm text-gray-600">Time Remaining: <span className="font-bold">{timeLeft}</span></p></div>
                 <div className="space-y-2">
-                  {bidOptions.map((option, index) => (
+                  {bidOptions.map((option) => (
                     <Button 
                       key={option.percentage} 
                       variant="ghost"

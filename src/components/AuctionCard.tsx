@@ -1,28 +1,29 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client'; // Importe o cliente supabase
 
-// Interface atualizada para corresponder aos dados do Supabase
 interface Lead {
-  id: string; // UUID é uma string
+  id: string;
   lead_score: number;
   interest_type: string;
   location: string;
   description: string;
   price_minimum: number;
-  ends_at: string; // Supabase envia timestamptz como string
+  ends_at: string;
 }
 
 interface AuctionCardProps {
-  auction: Lead; // Renomeado para 'auction' para manter o resto do código, mas usando nossa interface 'Lead'
+  auction: Lead;
 }
 
 export const AuctionCard = ({ auction }: AuctionCardProps) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
+  const [currentBid, setCurrentBid] = useState<number | null>(null); // Estado para o lance atual
 
+  // useEffect para o cronômetro
   useEffect(() => {
     const calculateTimeLeft = () => {
-      // Converte a string de data do Supabase para um objeto Date
       const endTime = new Date(auction.ends_at).getTime();
       const now = new Date().getTime();
       const difference = endTime - now;
@@ -42,13 +43,30 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
       }
     };
 
-    // Calcula imediatamente e depois a cada segundo
     calculateTimeLeft();
     const timer = setInterval(calculateTimeLeft, 1000);
-
-    // Limpa o timer quando o componente é desmontado
     return () => clearInterval(timer);
   }, [auction.ends_at]);
+
+  // useEffect para buscar o lance mais alto
+  useEffect(() => {
+    const fetchHighestBid = async () => {
+      const { data, error } = await supabase
+        .from('bids')
+        .select('amount')
+        .eq('lead_id', auction.id)
+        .order('amount', { ascending: false })
+        .limit(1)
+        .single(); // .single() retorna um objeto ou null, ideal para nós
+
+      if (data) {
+        setCurrentBid(data.amount);
+      }
+      // Se der erro ou não houver lances (data=null), currentBid continua null, mostrando '--'
+    };
+
+    fetchHighestBid();
+  }, [auction.id]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-AU', {
@@ -64,7 +82,6 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
     return 'bg-red-500';
   };
 
-  // Funções de clique (manteremos a lógica para depois)
   const handlePlaceBid = () => console.log(`Placing bid for lead ${auction.id}`);
   const handleBuyNow = () => console.log(`Buy now for lead ${auction.id}`);
 
@@ -99,7 +116,9 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-600">Current Bid:</span>
-            <span className="text-sm font-semibold text-green-600">--</span>
+            <span className="text-sm font-semibold text-green-600">
+              {currentBid ? formatCurrency(currentBid) : '--'}
+            </span>
           </div>
         </div>
 

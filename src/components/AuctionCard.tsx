@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Lead {
@@ -20,6 +21,7 @@ interface AuctionCardProps {
 export const AuctionCard = ({ auction }: AuctionCardProps) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [currentBid, setCurrentBid] = useState<number | null>(null);
+  const [isBidModalOpen, setIsBidModalOpen] = useState(false);
 
   useEffect(() => {
     const calculateTimeLeft = () => {
@@ -85,52 +87,99 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
     : auction.price_minimum * 1.5;
   // --- FIM DA NOVA LÓGICA ---
 
-  const handlePlaceBid = () => console.log(`Placing bid for lead ${auction.id}`);
+  const handlePlaceBid = () => setIsBidModalOpen(true);
   const handleBuyNow = () => console.log(`Buy now for lead ${auction.id}`);
+  
+  const handleBidIncrement = (percentage: string) => {
+    console.log(`Placing bid with ${percentage} increment for lead ${auction.id}`);
+    setIsBidModalOpen(false);
+  };
 
   return (
-    <Card className="relative h-full flex flex-col hover:shadow-lg transition-shadow">
-      <div className="absolute top-4 right-4 z-10">
-        <div className={`w-12 h-12 rounded-full ${getScoreColor(auction.lead_score)} flex items-center justify-center text-white font-bold text-sm`}>
-          {auction.lead_score}
-        </div>
-      </div>
-
-      <CardContent className="p-6 flex flex-col h-full">
-        {/* ... (código para interest_type, location, description, etc. continua o mesmo) ... */}
-        <div className="mb-4 pr-16">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{auction.interest_type}</h3>
-          <p className="text-sm text-gray-600 mb-3">{auction.location}</p>
-        </div>
-        <div className="mb-4 flex-grow">
-          <p className="text-sm text-gray-700 line-clamp-3">{auction.description}</p>
-        </div>
-        <div className="space-y-3 mb-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Minimum Price:</span>
-            <span className="text-sm font-medium">{formatCurrency(auction.price_minimum)}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Current Bid:</span>
-            <span className="text-sm font-semibold text-green-600">{currentBid ? formatCurrency(currentBid) : '--'}</span>
+    <>
+      <Card className="relative h-full flex flex-col hover:shadow-lg transition-shadow">
+        <div className="absolute top-4 right-4 z-10">
+          <div className={`w-12 h-12 rounded-full ${getScoreColor(auction.lead_score)} flex items-center justify-center text-white font-bold text-sm`}>
+            {auction.lead_score}
           </div>
         </div>
-        <div className="mb-6 p-3 bg-blue-50 rounded-lg text-center">
-          <p className="text-xs text-gray-600 mb-1">Time Remaining</p>
-          <p className="text-lg font-bold text-blue-600">{timeLeft}</p>
-        </div>
-        {/* --- FIM DO CÓDIGO INALTERADO --- */}
 
-        {/* --- BOTÕES ATUALIZADOS --- */}
-        <div className="grid grid-cols-2 gap-3 mt-auto">
-          <Button onClick={handlePlaceBid} variant="outline" className="w-full">
-            Place Bid
+        <CardContent className="p-6 flex flex-col h-full">
+          {/* ... (código para interest_type, location, description, etc. continua o mesmo) ... */}
+          <div className="mb-4 pr-16">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">{auction.interest_type}</h3>
+            <p className="text-sm text-gray-600 mb-3">{auction.location}</p>
+          </div>
+          <div className="mb-4 flex-grow">
+            <p className="text-sm text-gray-700 line-clamp-3">{auction.description}</p>
+          </div>
+          <div className="space-y-3 mb-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Minimum Price:</span>
+              <span className="text-sm font-medium">{formatCurrency(auction.price_minimum)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Current Bid:</span>
+              <span className="text-sm font-semibold text-green-600">{currentBid ? formatCurrency(currentBid) : '--'}</span>
+            </div>
+          </div>
+          <div className="mb-6 p-3 bg-blue-50 rounded-lg text-center">
+            <p className="text-xs text-gray-600 mb-1">Time Remaining</p>
+            <p className="text-lg font-bold text-blue-600">{timeLeft}</p>
+          </div>
+          {/* --- FIM DO CÓDIGO INALTERADO --- */}
+
+          {/* --- BOTÕES ATUALIZADOS --- */}
+          <div className="grid grid-cols-2 gap-3 mt-auto">
+            <Button onClick={handlePlaceBid} variant="outline" className="w-full">
+              Place Bid
+            </Button>
+            <Button onClick={handleBuyNow} className="w-full">
+              Buy Now for {formatCurrency(buyNowPrice)}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isBidModalOpen} onOpenChange={setIsBidModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Place Your Bid</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-3 py-4">
+            <Button 
+              onClick={() => handleBidIncrement('+10%')} 
+              variant="outline" 
+              className="w-full"
+            >
+              +10%
+            </Button>
+            <Button 
+              onClick={() => handleBidIncrement('+20%')} 
+              variant="outline" 
+              className="w-full"
+            >
+              +20%
+            </Button>
+            <Button 
+              onClick={() => handleBidIncrement('+30%')} 
+              variant="outline" 
+              className="w-full"
+            >
+              +30%
+            </Button>
+          </div>
+          
+          <Button 
+            onClick={() => setIsBidModalOpen(false)} 
+            variant="secondary" 
+            className="w-full"
+          >
+            Cancel
           </Button>
-          <Button onClick={handleBuyNow} className="w-full">
-            Buy Now for {formatCurrency(buyNowPrice)}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };

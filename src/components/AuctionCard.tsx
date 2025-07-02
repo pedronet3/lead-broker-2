@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client'; // Importe o cliente supabase
+import { supabase } from '@/integrations/supabase/client';
 
 interface Lead {
   id: string;
@@ -19,9 +19,8 @@ interface AuctionCardProps {
 
 export const AuctionCard = ({ auction }: AuctionCardProps) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
-  const [currentBid, setCurrentBid] = useState<number | null>(null); // Estado para o lance atual
+  const [currentBid, setCurrentBid] = useState<number | null>(null);
 
-  // useEffect para o cronômetro
   useEffect(() => {
     const calculateTimeLeft = () => {
       const endTime = new Date(auction.ends_at).getTime();
@@ -48,7 +47,6 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
     return () => clearInterval(timer);
   }, [auction.ends_at]);
 
-  // useEffect para buscar o lance mais alto
   useEffect(() => {
     const fetchHighestBid = async () => {
       const { data, error } = await supabase
@@ -57,12 +55,11 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
         .eq('lead_id', auction.id)
         .order('amount', { ascending: false })
         .limit(1)
-        .single(); // .single() retorna um objeto ou null, ideal para nós
+        .single();
 
       if (data) {
         setCurrentBid(data.amount);
       }
-      // Se der erro ou não houver lances (data=null), currentBid continua null, mostrando '--'
     };
 
     fetchHighestBid();
@@ -82,6 +79,12 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
     return 'bg-red-500';
   };
 
+  // --- NOVA LÓGICA AQUI ---
+  const buyNowPrice = currentBid 
+    ? currentBid * 1.5 
+    : auction.price_minimum * 1.5;
+  // --- FIM DA NOVA LÓGICA ---
+
   const handlePlaceBid = () => console.log(`Placing bid for lead ${auction.id}`);
   const handleBuyNow = () => console.log(`Buy now for lead ${auction.id}`);
 
@@ -94,21 +97,14 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
       </div>
 
       <CardContent className="p-6 flex flex-col h-full">
+        {/* ... (código para interest_type, location, description, etc. continua o mesmo) ... */}
         <div className="mb-4 pr-16">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {auction.interest_type}
-          </h3>
-          <p className="text-sm text-gray-600 mb-3">
-            {auction.location}
-          </p>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">{auction.interest_type}</h3>
+          <p className="text-sm text-gray-600 mb-3">{auction.location}</p>
         </div>
-
         <div className="mb-4 flex-grow">
-          <p className="text-sm text-gray-700 line-clamp-3">
-            {auction.description}
-          </p>
+          <p className="text-sm text-gray-700 line-clamp-3">{auction.description}</p>
         </div>
-
         <div className="space-y-3 mb-4">
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-600">Minimum Price:</span>
@@ -116,25 +112,22 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-600">Current Bid:</span>
-            <span className="text-sm font-semibold text-green-600">
-              {currentBid ? formatCurrency(currentBid) : '--'}
-            </span>
+            <span className="text-sm font-semibold text-green-600">{currentBid ? formatCurrency(currentBid) : '--'}</span>
           </div>
         </div>
-
         <div className="mb-6 p-3 bg-blue-50 rounded-lg text-center">
           <p className="text-xs text-gray-600 mb-1">Time Remaining</p>
-          <p className="text-lg font-bold text-blue-600">
-            {timeLeft}
-          </p>
+          <p className="text-lg font-bold text-blue-600">{timeLeft}</p>
         </div>
+        {/* --- FIM DO CÓDIGO INALTERADO --- */}
 
+        {/* --- BOTÕES ATUALIZADOS --- */}
         <div className="grid grid-cols-2 gap-3 mt-auto">
           <Button onClick={handlePlaceBid} variant="outline" className="w-full">
             Place Bid
           </Button>
           <Button onClick={handleBuyNow} className="w-full">
-            Buy Now
+            Buy Now for {formatCurrency(buyNowPrice)}
           </Button>
         </div>
       </CardContent>

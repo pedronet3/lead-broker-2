@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { toast } from '@/hooks/use-toast';
 
+// Interface describing the shape of our lead data from Supabase
 interface Lead {
   id: string;
   lead_score: number;
@@ -32,7 +33,7 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
   };
 
   useEffect(() => {
-    // This is the new, improved calculateTimeLeft function.
+    // This effect calculates the time remaining and updates it every second.
     const calculateTimeLeft = () => {
       const endTime = new Date(auction.ends_at).getTime();
       const now = new Date().getTime();
@@ -44,7 +45,7 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
         const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((difference % (1000 * 60)) / 1000); // Added seconds calculation
 
-        // New display logic
+        // New display logic to include seconds when appropriate
         if (days > 0) {
           setTimeLeft(`${days}d ${hours}h ${minutes}m`);
         } else if (hours > 0) {
@@ -59,10 +60,25 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
         setTimeLeft('Auction Ended');
       }
     };
+    
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 1000);
+
+    // Cleanup function to clear the interval when the component is no longer on screen
+    return () => clearInterval(timer);
+  }, [auction.ends_at]);
 
   useEffect(() => {
+    // This effect fetches the highest bid initially and then listens for real-time updates.
     fetchHighestBid(); 
-    const channel = supabase.channel(`bids-for-lead-${auction.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids', filter: `lead_id=eq.${auction.id}` }, (payload) => { fetchHighestBid(); }).subscribe();
+    const channel = supabase.channel(`bids-for-lead-${auction.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids', filter: `lead_id=eq.${auction.id}` }, 
+        (payload) => {
+          fetchHighestBid(); 
+        }
+      )
+      .subscribe();
+
+    // Cleanup function to remove the real-time subscription
     return () => { supabase.removeChannel(channel); };
   }, [auction.id]);
 
@@ -91,12 +107,9 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
 
   const handleBuyNow = async () => {
     setIsSubmitting(true);
-    const { data, error } = await supabase.functions.invoke('buy-now', {
-      body: { lead_id: auction.id },
-    });
-    if (error) {
-      toast({ title: "Buy Now Failed", description: error.message, variant: "destructive" });
-    } else {
+    const { data, error } = await supabase.functions.invoke('buy-now', { body: { lead_id: auction.id } });
+    if (error) { toast({ title: "Buy Now Failed", description: error.message, variant: "destructive" }); } 
+    else {
       const buyNowPriceValue = currentBid ? currentBid * 1.5 : auction.price_minimum * 1.5;
       toast({ title: "Purchase Successful!", description: `Lead acquired for ${formatCurrency(buyNowPriceValue)}.` });
     }

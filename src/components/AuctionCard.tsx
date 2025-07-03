@@ -32,21 +32,33 @@ export const AuctionCard = ({ auction }: AuctionCardProps) => {
   };
 
   useEffect(() => {
+    // This is the new, improved calculateTimeLeft function.
     const calculateTimeLeft = () => {
       const endTime = new Date(auction.ends_at).getTime();
       const now = new Date().getTime();
       const difference = endTime - now;
+
       if (difference > 0) {
         const days = Math.floor(difference / (1000 * 60 * 60 * 24));
         const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        if (days > 0) setTimeLeft(`${days}d ${hours}h ${minutes}m`); else setTimeLeft(`${hours}h ${minutes}m`);
-      } else { setTimeLeft('Auction Ended'); }
+        const seconds = Math.floor((difference % (1000 * 60)) / 1000); // Added seconds calculation
+
+        // New display logic
+        if (days > 0) {
+          setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+        } else if (hours > 0) {
+          setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+        } else if (minutes > 0) {
+          setTimeLeft(`${minutes}m ${seconds}s`);
+        } else {
+          setTimeLeft(`${seconds}s`);
+        }
+
+      } else {
+        setTimeLeft('Auction Ended');
+      }
     };
-    calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
-    return () => clearInterval(timer);
-  }, [auction.ends_at]);
 
   useEffect(() => {
     fetchHighestBid(); 

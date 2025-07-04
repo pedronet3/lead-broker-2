@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo } from 'react'; // Added useMemo
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom'; // A importação está aqui
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from "@/components/ui/input"; // Import Input component
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -15,42 +15,74 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeLeads, setActiveLeads] = useState<any[]>([]);
   const [purchasedLeads, setPurchasedLeads] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState(''); // New state for the search input
+  const [searchTerm, setSearchTerm] = useState('');
+  const navigate = useNavigate(); // <<< --- ESTA É A LINHA QUE FALTAVA ---
 
   const fetchData = async (userId: string) => {
-    // ... (função fetchData - sem alterações)
     setIsLoading(true);
     const { data: activeData, error: activeError } = await supabase.from('leads').select('*').eq('status', 'in_auction');
     if (activeError) toast({ title: "Error fetching active auctions", description: activeError.message, variant: "destructive" });
     else if (activeData) setActiveLeads(activeData);
+
     const { data: purchasedData, error: purchasedError } = await supabase.from('leads').select('*').eq('assigned_to_partner_id', userId);
     if (purchasedError) toast({ title: "Error fetching your leads", description: purchasedError.message, variant: "destructive" });
     else if (purchasedData) setPurchasedLeads(purchasedData);
+    
     setIsLoading(false);
   };
 
   useEffect(() => {
-    // ... (useEffect principal - sem alterações)
     const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) { navigate('/login'); } 
-      else { setUser(session.user); fetchData(session.user.id); }
+      if (!session?.user) {
+        navigate('/login');
+      } else {
+        setUser(session.user);
+        fetchData(session.user.id);
+      }
     };
+
     checkUserSession();
-    const leadsChannel = supabase.channel('public:leads').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, (payload) => {
-      const currentUser = supabase.auth.getUser();
-      currentUser.then(({ data: { user } }) => { if (user) fetchData(user.id); });
-    }).subscribe();
-    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session?.user) { navigate('/login'); } 
-      else { setUser(session.user); }
-    });
-    return () => { supabase.removeChannel(leadsChannel); authSubscription?.unsubscribe(); };
+
+    const leadsChannel = supabase
+      .channel('public:leads')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' },
+        (payload) => {
+          const currentUser = supabase.auth.getUser();
+          currentUser.then(({ data: { user } }) => {
+            if (user) {
+              fetchData(user.id);
+            }
+          });
+        }
+      )
+      .subscribe();
+
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_OUT' || !session?.user) {
+          navigate('/login');
+        } else {
+          setUser(session.user);
+        }
+      }
+    );
+
+    return () => {
+      supabase.removeChannel(leadsChannel);
+      authSubscription?.unsubscribe();
+    };
   }, [navigate]);
 
-  const handleSignOut = async () => { /* ... (função handleSignOut - sem alterações) ... */ };
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/login');
+    } catch (error) {
+      toast({ title: "Sign Out Failed", description: (error as Error).message, variant: "destructive" });
+    }
+  };
 
-  // New logic to filter leads based on the search term
   const filteredPurchasedLeads = useMemo(() => {
     if (!searchTerm) {
       return purchasedLeads;
@@ -63,14 +95,25 @@ const Dashboard = () => {
     );
   }, [purchasedLeads, searchTerm]);
 
-  if (isLoading) { /* ... (bloco isLoading - sem alterações) ... */ }
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
-        {/* ... (cabeçalho e card de boas-vindas - sem alterações) ... */}
-        <div className="flex justify-between items-center mb-8"><h1 className="text-3xl font-bold">Dashboard</h1><Button onClick={handleSignOut} variant="outline">Sign Out</Button></div>
-        <Card className="mb-6"><CardHeader><CardTitle>Welcome back!</CardTitle></CardHeader><CardContent><p className="text-gray-600 mb-2">You are logged in as: <strong>{user?.email}</strong></p></CardContent></Card>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <Button onClick={handleSignOut} variant="outline">Sign Out</Button>
+        </div>
+        <Card className="mb-6">
+          <CardHeader><CardTitle>Welcome back!</CardTitle></CardHeader>
+          <CardContent><p className="text-gray-600 mb-2">You are logged in as: <strong>{user?.email}</strong></p></CardContent>
+        </Card>
 
         <Tabs defaultValue="active-auctions" className="w-full">
           <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
@@ -80,11 +123,12 @@ const Dashboard = () => {
           
           <TabsContent value="active-auctions">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
-              {activeLeads.map((lead) => (<AuctionCard key={lead.id} auction={lead} />))}
+              {activeLeads.map((lead) => (
+                <AuctionCard key={lead.id} auction={lead} />
+              ))}
             </div>
           </TabsContent>
 
-          {/* --- CONTEÚDO DA ABA "MY LEADS" ATUALIZADO --- */}
           <TabsContent value="my-leads">
             <Card className="mt-6">
               <CardHeader>
@@ -107,6 +151,7 @@ const Dashboard = () => {
                       <TableHead>Email</TableHead>
                       <TableHead>Interest Type</TableHead>
                       <TableHead>Purchase Date</TableHead>
+                      <TableHead>Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -119,6 +164,7 @@ const Dashboard = () => {
                         <TableCell>
                           {lead.purchased_at ? new Date(lead.purchased_at).toLocaleDateString('en-AU') : 'N/A'}
                         </TableCell>
+                        <TableCell className="max-w-xs truncate">{lead.description}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

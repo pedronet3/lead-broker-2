@@ -7,17 +7,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import type { User } from '@supabase/supabase-js';
 import { AuctionCard } from '@/components/AuctionCard';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Import Table components
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeLeads, setActiveLeads] = useState<any[]>([]);
-  const [purchasedLeads, setPurchasedLeads] = useState<any[]>([]); // New state for purchased leads
+  const [purchasedLeads, setPurchasedLeads] = useState<any[]>([]);
   const navigate = useNavigate();
 
   const fetchData = async (userId: string) => {
+    // We set loading to true at the start of a fetch sequence
     setIsLoading(true);
+    
     // Fetch active auctions
     const { data: activeData, error: activeError } = await supabase
       .from('leads')
@@ -36,30 +38,33 @@ const Dashboard = () => {
     if (purchasedError) toast({ title: "Error fetching your leads", description: purchasedError.message, variant: "destructive" });
     else if (purchasedData) setPurchasedLeads(purchasedData);
     
+    // We set loading to false only after all data has been fetched
     setIsLoading(false);
   };
 
   useEffect(() => {
-    const checkUserAndFetchData = async () => {
+    const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         navigate('/login');
-        return;
+      } else {
+        setUser(session.user);
+        fetchData(session.user.id);
       }
-      setUser(session.user);
-      fetchData(session.user.id);
     };
 
-    checkUserAndFetchData();
+    checkUserSession();
 
     const leadsChannel = supabase
       .channel('public:leads')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' },
         (payload) => {
-          console.log('Change received on leads table!', payload);
-          if (user) {
-            fetchData(user.id); // Re-fetch all data on any change
-          }
+          const currentUser = supabase.auth.getUser();
+          currentUser.then(({ data: { user } }) => {
+            if (user) {
+              fetchData(user.id);
+            }
+          });
         }
       )
       .subscribe();
@@ -78,7 +83,7 @@ const Dashboard = () => {
       supabase.removeChannel(leadsChannel);
       authSubscription?.unsubscribe();
     };
-  }, [navigate, user]); // Added user to dependency array
+  }, [navigate]); // Correct dependency array, only includes navigate
 
   const handleSignOut = async () => {
     try {

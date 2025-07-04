@@ -43,7 +43,7 @@ export type Database = {
             foreignKeyName: "bids_partner_id_fkey"
             columns: ["partner_id"]
             isOneToOne: false
-            referencedRelation: "Partners"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -51,7 +51,9 @@ export type Database = {
       leads: {
         Row: {
           assigned_to_partner_id: string | null
+          contacted_at: string | null
           created_at: string
+          deal_status: string | null
           description: string | null
           email: string | null
           ends_at: string | null
@@ -67,7 +69,9 @@ export type Database = {
         }
         Insert: {
           assigned_to_partner_id?: string | null
+          contacted_at?: string | null
           created_at?: string
+          deal_status?: string | null
           description?: string | null
           email?: string | null
           ends_at?: string | null
@@ -83,7 +87,9 @@ export type Database = {
         }
         Update: {
           assigned_to_partner_id?: string | null
+          contacted_at?: string | null
           created_at?: string
+          deal_status?: string | null
           description?: string | null
           email?: string | null
           ends_at?: string | null
@@ -102,12 +108,12 @@ export type Database = {
             foreignKeyName: "Leads_assigned_to_partner_id_fkey"
             columns: ["assigned_to_partner_id"]
             isOneToOne: false
-            referencedRelation: "Partners"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
       }
-      Partners: {
+      partners: {
         Row: {
           acl_license_number: string | null
           company_name: string | null
@@ -177,7 +183,7 @@ export type Database = {
             foreignKeyName: "transactions_partner_id_fkey"
             columns: ["partner_id"]
             isOneToOne: false
-            referencedRelation: "Partners"
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import type { User } from '@supabase/supabase-js';
@@ -12,6 +13,7 @@ const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [leads, setLeads] = useState<any[]>([]);
+  const [myLeads, setMyLeads] = useState<any[]>([]);
   const navigate = useNavigate();
 
   const fetchLeads = async () => {
@@ -41,6 +43,33 @@ const Dashboard = () => {
     }
   };
 
+  const fetchMyLeads = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('assigned_to_partner_id', user.id);
+
+      if (error) {
+        toast({
+          title: "Error fetching my leads",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else if (data) {
+        setMyLeads(data);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while fetching my leads.",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -50,6 +79,7 @@ const Dashboard = () => {
       }
       setUser(session.user);
       fetchLeads();
+      fetchMyLeads();
     };
 
     checkUser();
@@ -65,6 +95,7 @@ const Dashboard = () => {
           console.log('Change received on leads table!', payload);
           // When a change occurs, re-fetch the list of leads.
           fetchLeads();
+          fetchMyLeads();
         }
       )
       .subscribe();
@@ -117,8 +148,9 @@ const Dashboard = () => {
           <CardContent><p className="text-gray-600 mb-2">You are logged in as: <strong>{user?.email}</strong></p></CardContent>
         </Card>
         <Tabs defaultValue="active-auctions" className="w-full">
-          <TabsList className="grid w-full grid-cols-1 lg:w-[400px]">
+          <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
             <TabsTrigger value="active-auctions">Active Auctions</TabsTrigger>
+            <TabsTrigger value="my-leads">My Leads</TabsTrigger>
           </TabsList>
           <TabsContent value="active-auctions">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
@@ -126,6 +158,47 @@ const Dashboard = () => {
                 <AuctionCard key={lead.id} auction={lead} />
               ))}
             </div>
+          </TabsContent>
+          <TabsContent value="my-leads">
+            <Card>
+              <CardHeader>
+                <CardTitle>My Assigned Leads</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Full Name</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Interest Type</TableHead>
+                      <TableHead>Contacted</TableHead>
+                      <TableHead>Deal Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {myLeads.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-gray-500">
+                          No leads assigned to you yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      myLeads.map((lead) => (
+                        <TableRow key={lead.id}>
+                          <TableCell>{lead.First_Name && lead.Last_Name ? `${lead.First_Name} ${lead.Last_Name}` : '--'}</TableCell>
+                          <TableCell>{lead.phone || '--'}</TableCell>
+                          <TableCell>{lead.email || '--'}</TableCell>
+                          <TableCell>{lead.interest_type || '--'}</TableCell>
+                          <TableCell>{lead.contacted_at ? new Date(lead.contacted_at).toLocaleDateString() : 'Not contacted'}</TableCell>
+                          <TableCell>{lead.deal_status || 'Pending'}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
